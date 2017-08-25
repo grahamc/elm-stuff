@@ -53,7 +53,7 @@ type alias Option =
 
 
 type alias NixOptions =
-    List (String, Option)
+    List ( String, Option )
 
 
 type alias Model =
@@ -71,24 +71,33 @@ clamped : Model -> Model
 clamped model =
     { model | page = (clamp 1 (total_pages model.matchingOptions) model.page) }
 
-option_sort : (String, Option) -> String
-option_sort (name, option) =
-  name
+
+option_sort : ( String, Option ) -> String
+option_sort ( name, option ) =
+    name
+
 
 update_options : Model -> NixOptions -> Model
 update_options model unsorted_options =
     let
-        options = List.sortBy option_sort unsorted_options
+        options =
+            List.sortBy option_sort unsorted_options
+
         matchingOptions =
             filtered options model.terms
 
-        page = case model.selected of
-          Just option ->
-            case which_page matchingOptions option of
-               Just p -> p
-               Nothing -> model.page
-          Nothing ->
-            model.page
+        page =
+            case model.selected of
+                Just option ->
+                    case which_page matchingOptions option of
+                        Just p ->
+                            p
+
+                        Nothing ->
+                            model.page
+
+                Nothing ->
+                    model.page
     in
         clamped
             ({ model
@@ -156,22 +165,21 @@ splitQuery query =
 updateUrl : Model -> Cmd Msg
 updateUrl model =
     let
-        querystring = case model.selected of
-                    Nothing ->
-                      String.append
-                          (String.append "?query=" (Http.encodeUri model.query))
-                          (if model.page > 1 then
+        querystring =
+            case model.selected of
+                Nothing ->
+                    String.append
+                        (String.append "?query=" (Http.encodeUri model.query))
+                        (if model.page > 1 then
                             (String.append "&page=" (Http.encodeUri (toString model.page)))
-                            else
-                                ""
-                          )
+                         else
+                            ""
+                        )
 
-                    Just opt ->
-                        (String.append "?selected=" (Http.encodeUri opt))
-
-
-    in Navigation.newUrl querystring
-
+                Just opt ->
+                    (String.append "?selected=" (Http.encodeUri opt))
+    in
+        Navigation.newUrl querystring
 
 
 type Msg
@@ -221,8 +229,11 @@ update msg model =
         ChangePage newPage ->
             let
                 newModel =
-                    clamped { model | page = newPage
-                                    , selected = Nothing }
+                    clamped
+                        { model
+                            | page = newPage
+                            , selected = Nothing
+                        }
             in
                 ( newModel, updateUrl newModel )
 
@@ -394,35 +405,36 @@ description_to_text input =
 
 describe_option : Option -> Html Msg
 describe_option option =
-                div [ class "search-details" ] [
-    table []
-        [ tbody []
-            [ tr []
-                [ th [] [ text "Description:" ]
-                , td [] []
-                , td [ class "description docbook" ] [ text (description_to_text option.description) ]
-                ]
-            , tr []
-                [ th [] [ text "Default Value:" ]
-                , td [] []
-                , td [ class "default" ] [ null_is_not_given nix option.default ]
-                ]
-            , tr []
-                [ th [] [ text "Example value:" ]
-                , td [] []
-                , td [ class "example" ] [ null_is_not_given nix option.example ]
-                ]
-            , tr []
-                [ th [] [ text "Declared In:" ]
-                , td [] []
-                , td [ class "declared-in" ] (List.map declaration_link option.declarations)
+    div [ class "search-details" ]
+        [ table []
+            [ tbody []
+                [ tr []
+                    [ th [] [ text "Description:" ]
+                    , td [] []
+                    , td [ class "description docbook" ] [ text (description_to_text option.description) ]
+                    ]
+                , tr []
+                    [ th [] [ text "Default Value:" ]
+                    , td [] []
+                    , td [ class "default" ] [ null_is_not_given nix option.default ]
+                    ]
+                , tr []
+                    [ th [] [ text "Example value:" ]
+                    , td [] []
+                    , td [ class "example" ] [ null_is_not_given nix option.example ]
+                    ]
+                , tr []
+                    [ th [] [ text "Declared In:" ]
+                    , td [] []
+                    , td [ class "declared-in" ] (List.map declaration_link option.declarations)
+                    ]
                 ]
             ]
         ]
-        ]
 
-optionToTd : Maybe String -> (String, Option) -> List (Html Msg)
-optionToTd selected (name, option) =
+
+optionToTd : Maybe String -> ( String, Option ) -> List (Html Msg)
+optionToTd selected ( name, option ) =
     let
         isSelected =
             (case selected of
@@ -464,8 +476,8 @@ term_matches name term =
     String.contains term (String.toLower name)
 
 
-option_filter : List String -> (String, Option) -> Bool
-option_filter terms (name, option) =
+option_filter : List String -> ( String, Option ) -> Bool
+option_filter terms ( name, option ) =
     List.any (term_matches name) terms
         || List.any (term_matches option.description) terms
 
@@ -475,17 +487,24 @@ filtered options terms =
     List.filter (option_filter terms) options
 
 
-opt_tuple_matches_name : String -> (String, Option) -> Bool
-opt_tuple_matches_name term (name, option) =
-   term == name
+opt_tuple_matches_name : String -> ( String, Option ) -> Bool
+opt_tuple_matches_name term ( name, option ) =
+    term == name
+
 
 which_page : NixOptions -> String -> Maybe Int
 which_page options term =
-  let
-    pos = List.Extra.findIndex (opt_tuple_matches_name term) options
-  in case pos of
-    Just position -> Just (ceiling ((toFloat position) / 15.0))
-    Nothing -> Nothing
+    let
+        pos =
+            List.Extra.findIndex (opt_tuple_matches_name term) options
+    in
+        case pos of
+            Just position ->
+                Just (ceiling ((toFloat position) / 15.0))
+
+            Nothing ->
+                Nothing
+
 
 fetch_page : Int -> List a -> List a
 fetch_page page content =
@@ -511,20 +530,26 @@ changePageIf cond page txt =
 view : Model -> Html Msg
 view model =
     div [ class "container main" ]
-        [ div [ class "page-header" ] [ h1 [ ] [ text "Search NixOS options" ] ]
-        , p [] [
-          input [ id "search", class "search-query span3", autofocus True, value model.query, onInput ChangeQuery ] []
-        ]
+        [ div [ class "page-header" ] [ h1 [] [ text "Search NixOS options" ] ]
+        , p []
+            [ input [ id "search", class "search-query span3", autofocus True, value model.query, onInput ChangeQuery ] []
+            ]
         , hr [] []
-        , p [ id "how-many" ] [ em [] [ text (String.concat
-            [ "Showing results "
-            , (toString (((model.page - 1) * 15) + 1))
-            , "-"
-            , (toString (min (List.length model.matchingOptions) ((model.page) * 15)))
-            , " of "
-            , (toString (List.length model.matchingOptions))
-            , "."
-            ])]]
+        , p [ id "how-many" ]
+            [ em []
+                [ text
+                    (String.concat
+                        [ "Showing results "
+                        , (toString (((model.page - 1) * 15) + 1))
+                        , "-"
+                        , (toString (min (List.length model.matchingOptions) ((model.page) * 15)))
+                        , " of "
+                        , (toString (List.length model.matchingOptions))
+                        , "."
+                        ]
+                    )
+                ]
+            ]
         , table [ class "options table table-hover" ]
             [ thead []
                 [ tr []
