@@ -1,7 +1,7 @@
 module Main exposing (..)
 
-import Html exposing (node, Attribute, Html, a, text, em, table, tr, th, td, tbody, thead, input, ul, li, button, h1, h2, div, pre)
-import Html.Attributes exposing (placeholder, src, disabled, href)
+import Html exposing (node, Attribute, Html, a, text, em, table, tr, th, td, tbody, thead, input, ul, li, button, h1, h2, div, pre, p, hr)
+import Html.Attributes exposing (placeholder, src, disabled, href, class, autofocus, value, id)
 import Html.Events exposing (onInput, onClick)
 import Http
 import Json.Encode exposing (encode, Value, null)
@@ -16,6 +16,7 @@ import Maybe
 import Array
 import ExEmElm.Parser
 import ExEmElm.Traverse
+import List.Extra
 
 
 main =
@@ -70,17 +71,30 @@ clamped : Model -> Model
 clamped model =
     { model | page = (clamp 1 (total_pages model.matchingOptions) model.page) }
 
+option_sort : (String, Option) -> String
+option_sort (name, option) =
+  name
 
 update_options : Model -> NixOptions -> Model
-update_options model options =
+update_options model unsorted_options =
     let
+        options = List.sortBy option_sort unsorted_options
         matchingOptions =
             filtered options model.terms
+
+        page = case model.selected of
+          Just option ->
+            case which_page matchingOptions option of
+               Just p -> p
+               Nothing -> model.page
+          Nothing ->
+            model.page
     in
         clamped
             ({ model
                 | options = options
                 , matchingOptions = matchingOptions
+                , page = page
              }
             )
 
@@ -141,24 +155,23 @@ splitQuery query =
 
 updateUrl : Model -> Cmd Msg
 updateUrl model =
-    Navigation.newUrl
-        (String.append
-            (String.append "?query=" (Http.encodeUri model.query))
-            (String.append
-                (if model.page > 1 then
-                    (String.append "&page=" (Http.encodeUri (toString model.page)))
-                 else
-                    ""
-                )
-                (case model.selected of
+    let
+        querystring = case model.selected of
                     Nothing ->
-                        ""
+                      String.append
+                          (String.append "?query=" (Http.encodeUri model.query))
+                          (if model.page > 1 then
+                            (String.append "&page=" (Http.encodeUri (toString model.page)))
+                            else
+                                ""
+                          )
 
                     Just opt ->
-                        (String.append "&selected=" (Http.encodeUri opt))
-                )
-            )
-        )
+                        (String.append "?selected=" (Http.encodeUri opt))
+
+
+    in Navigation.newUrl querystring
+
 
 
 type Msg
@@ -208,7 +221,8 @@ update msg model =
         ChangePage newPage ->
             let
                 newModel =
-                    clamped { model | page = newPage }
+                    clamped { model | page = newPage
+                                    , selected = Nothing }
             in
                 ( newModel, updateUrl newModel )
 
@@ -380,27 +394,32 @@ description_to_text input =
 
 describe_option : Option -> Html Msg
 describe_option option =
+                div [ class "search-details" ] [
     table []
         [ tbody []
             [ tr []
-                [ th [] [ text "Description" ]
-                , td [] [ text (description_to_text option.description) ]
+                [ th [] [ text "Description:" ]
+                , td [] []
+                , td [ class "description docbook" ] [ text (description_to_text option.description) ]
                 ]
             , tr []
-                [ th [] [ text "Default Value" ]
-                , td [] [ null_is_not_given nix option.default ]
+                [ th [] [ text "Default Value:" ]
+                , td [] []
+                , td [ class "default" ] [ null_is_not_given nix option.default ]
                 ]
             , tr []
-                [ th [] [ text "Example value" ]
-                , td [] [ null_is_not_given nix option.example ]
+                [ th [] [ text "Example value:" ]
+                , td [] []
+                , td [ class "example" ] [ null_is_not_given nix option.example ]
                 ]
             , tr []
-                [ th [] [ text "Declared In" ]
-                , td [] (List.map declaration_link option.declarations)
+                [ th [] [ text "Declared In:" ]
+                , td [] []
+                , td [ class "declared-in" ] (List.map declaration_link option.declarations)
                 ]
             ]
         ]
-
+        ]
 
 optionToTd : Maybe String -> (String, Option) -> List (Html Msg)
 optionToTd selected (name, option) =
@@ -432,7 +451,7 @@ optionToTd selected (name, option) =
                 []
                else
                 [ tr []
-                    [ td [] [ describe_option option ]
+                    [ td [ class "details" ] [ describe_option option ]
                     ]
                 ]
               )
@@ -456,8 +475,20 @@ filtered options terms =
     List.filter (option_filter terms) options
 
 
-page : Int -> List a -> List a
-page page content =
+opt_tuple_matches_name : String -> (String, Option) -> Bool
+opt_tuple_matches_name term (name, option) =
+   term == name
+
+which_page : NixOptions -> String -> Maybe Int
+which_page options term =
+  let
+    pos = List.Extra.findIndex (opt_tuple_matches_name term) options
+  in case pos of
+    Just position -> Just (ceiling ((toFloat position) / 15.0))
+    Nothing -> Nothing
+
+fetch_page : Int -> List a -> List a
+fetch_page page content =
     List.drop ((page - 1) * 15) (List.take (page * 15) content)
 
 
@@ -479,32 +510,42 @@ changePageIf cond page txt =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ h1 [] [ text "NixOS Option Search" ]
-        , h2 [] [ text (String.join ", " model.terms) ]
-        , h2 [] [ text model.query ]
-        , input [ placeholder model.query, onInput ChangeQuery ] []
-        , table []
+    div [ class "container main" ]
+        [ div [ class "page-header" ] [ h1 [ ] [ text "Search NixOS options" ] ]
+        , p [] [
+          input [ id "search", class "search-query span3", autofocus True, value model.query, onInput ChangeQuery ] []
+        ]
+        , hr [] []
+        , p [ id "how-many" ] [ em [] [ text (String.concat
+            [ "Showing results "
+            , (toString (((model.page - 1) * 15) + 1))
+            , "-"
+            , (toString (min (List.length model.matchingOptions) ((model.page) * 15)))
+            , " of "
+            , (toString (List.length model.matchingOptions))
+            , "."
+            ])]]
+        , table [ class "options table table-hover" ]
             [ thead []
                 [ tr []
-                    [ th [] [ text "Name" ]
+                    [ th [] [ text "Option name" ]
                     ]
                 ]
             , tbody []
-                (List.concat (List.map (optionToTd model.selected) (page model.page model.matchingOptions)))
+                (List.concat (List.map (optionToTd model.selected) (fetch_page model.page model.matchingOptions)))
             ]
-        , ul []
+        , ul [ class "pager" ]
             [ li []
-                [ (changePageIf (not (model.page == 1)) 1 "First")
+                [ (changePageIf (not (model.page == 1)) 1 "« First")
                 ]
             , li []
-                [ (changePageIf (model.page > 1) (model.page - 1) "Previous")
+                [ (changePageIf (model.page > 1) (model.page - 1) "‹ Previous")
                 ]
             , li []
-                [ (changePageIf (model.page < (total_pages model.matchingOptions)) (model.page + 1) "Next")
+                [ (changePageIf (model.page < (total_pages model.matchingOptions)) (model.page + 1) "Next ›")
                 ]
             , li []
-                [ (changePageIf (model.page < (total_pages model.matchingOptions)) (total_pages model.matchingOptions) "Last")
+                [ (changePageIf (model.page < (total_pages model.matchingOptions)) (total_pages model.matchingOptions) "Last »")
                 ]
             ]
         ]
